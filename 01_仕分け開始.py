@@ -12,7 +12,7 @@ INPUT_DIR = os.path.join(BASE_DIR, 'input_images')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'sorted_images')
 UNKNOWN_DIR = os.path.join(OUTPUT_DIR, 'unknown')
 THRESHOLD = 0.5
-RESIZE_MAX = 1200  # 長辺最大サイズ
+RESIZE_MAX = 1200  # 対象画像だけリサイズ
 
 # === 初期準備 ===
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -20,7 +20,7 @@ os.makedirs(UNKNOWN_DIR, exist_ok=True)
 
 print("顔画像仕分けツールを開始します...\n")
 
-# === 正解画像を読み込み ===
+# === 正解画像を読み込み（リサイズなし） ===
 reference_faces = {}
 print("顔データを読み込み中...")
 
@@ -36,10 +36,10 @@ for person_name in os.listdir(REFERENCE_DIR):
         file_path = os.path.join(person_path, file)
         try:
             pil_image = Image.open(file_path).convert("RGB")
-            pil_image.thumbnail((RESIZE_MAX, RESIZE_MAX))
-            image_np = np.array(pil_image)
+            image_np = np.array(pil_image)  # 正解データはリサイズしない
             face_locations = face_recognition.face_locations(image_np)
             if not face_locations:
+                print(f"[SKIP] 顔が検出できませんでした → {file_path}")
                 continue
             face_encs = face_recognition.face_encodings(image_np, face_locations)
             if face_encs:
@@ -53,7 +53,7 @@ for person_name in os.listdir(REFERENCE_DIR):
     else:
         print(f"  - {person_name}: 顔登録できませんでした")
 
-# === 画像仕分け処理 ===
+# === 画像仕分け処理（対象画像はリサイズあり） ===
 print("\n画像の仕分けを開始します...\n")
 failed_files = []
 
@@ -65,7 +65,7 @@ for file in os.listdir(INPUT_DIR):
 
     try:
         pil_image = Image.open(input_path).convert("RGB")
-        pil_image.thumbnail((RESIZE_MAX, RESIZE_MAX))
+        pil_image.thumbnail((RESIZE_MAX, RESIZE_MAX))  # 仕分ける時にリサイズあり
         image_np = np.array(pil_image)
         face_locations = face_recognition.face_locations(image_np)
         if not face_locations:
