@@ -36,7 +36,8 @@ for person_name in os.listdir(REFERENCE_DIR):
         file_path = os.path.join(person_path, file)
         try:
             pil_image = Image.open(file_path).convert("RGB")
-            image_np = np.array(pil_image)  # 正解データはリサイズしない
+            image_np = np.array(pil_image)
+            # 正解画像を検出
             face_locations = face_recognition.face_locations(image_np)
             if not face_locations:
                 print(f"[SKIP] 顔が検出できませんでした → {file_path}")
@@ -58,6 +59,7 @@ print("\n画像の仕分けを開始します...\n")
 failed_files = []
 
 for file in os.listdir(INPUT_DIR):
+    #隠しファイルが.で始まるので隠しファイルをスキップする
     if file.startswith("."):
         continue
 
@@ -88,20 +90,24 @@ for file in os.listdir(INPUT_DIR):
     target_encoding = encodings[0]
     best_match = 'unknown'
     best_distance = float('inf')
-
+    
+    # 正解画像との類似度を計算(登録ずみの正解データを全員チェックして類似度を比較)
     for name, ref_encs in reference_faces.items():
         distances = face_recognition.face_distance(ref_encs, target_encoding)
         min_distance = min(distances)
+        # 類似度(低いほど正解に似てる)が最も低い正解画像を選択
         if min_distance < best_distance:
             best_distance = min_distance
             best_match = name
 
+    # 類似度が閾値より高いならunknownとして分類
     if best_distance < THRESHOLD:
         person_dir = os.path.join(OUTPUT_DIR, best_match)
     else:
         person_dir = UNKNOWN_DIR
         best_match = "unknown"
 
+    # 分類先のフォルダを作成
     os.makedirs(person_dir, exist_ok=True)
     output_path = os.path.join(person_dir, file)
 
@@ -116,13 +122,35 @@ for file in os.listdir(INPUT_DIR):
         print(f"[ERROR] コピー失敗: {file} → {e}")
         failed_files.append(file)
 
-# === ログ出力 ===
-if failed_files:
-    log_path = os.path.join(BASE_DIR, "copy_failed.log")
-    with open(log_path, 'w') as f:
-        for file in failed_files:
-            f.write(file + '\n')
-    print(f"\nコピー失敗ファイルを {log_path} に保存しました（{len(failed_files)}件）")
+# === 最終確認：処理件数を表示 ===
+input_total = len([f for f in os.listdir(INPUT_DIR) if not f.startswith(".")])
 
-print("\nすべての処理が完了しました。")
+# sorted_images から unknown を除いた人数ごとの合計
+sorted_total = 0
+for person_name in os.listdir(OUTPUT_DIR):
+    person_dir = os.path.join(OUTPUT_DIR, person_name)
+    if person_name == "unknown" or not os.path.isdir(person_dir):
+        continue
+    sorted_total += len([
+        f for f in os.listdir(person_dir)
+        if not f.startswith(".")
+    ])
+
+unknown_total = len([
+    f for f in os.listdir(UNKNOWN_DIR)
+    if not f.startswith(".")
+])
+
+failed_total = len(failed_files)
+
+print("\n===== 処理結果サマリー =====")
+print(f"入力画像数           : {input_total} 枚")
+print(f"仕分け成功（known）  : {sorted_total} 枚")
+print(f"仕分け失敗（unknown）: {unknown_total} 枚")
+print(f"コピー失敗（エラー）: {failed_total} 枚")
+
+expected_total = sorted_total + unknown_total + failed_total
+if input_total != expected_total:
+    print(f"\n警告：処理件数と一致しません（入力: {input_total} ≠ 合計: {expected_total}）")
+
 input("\nEnterキーを押すとウィンドウを閉じます")
